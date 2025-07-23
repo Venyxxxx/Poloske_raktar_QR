@@ -1,5 +1,7 @@
 ﻿import cv2
 from threading import Thread
+import tkinter as tk
+from PIL import Image, ImageTk
 
 # Async video stream class
 class VideoStream:
@@ -28,32 +30,67 @@ class VideoStream:
 # --- Dahua RTSP substream (lower latency) ---
 rtsp_url = "rtsp://admin:Portal2008@192.168.6.88:554/cam/realmonitor?channel=1&subtype=1"
 
-#szoveg
+# Tkinter GUI
+class App(tk.Tk):
+    def __init__(self, video_stream):
+        super().__init__()
+        self.title("QR Scanner")
+        self.geometry("900x600")  # Teljes ablak méret
+        self.video_stream = video_stream
 
-# Start the video stream
-vs = VideoStream(rtsp_url)
-qr_detector = cv2.QRCodeDetector()
+        # Kamera képet megjelenítő Frame (az ablak kb 2/3 részét foglalja)
+        self.video_frame = tk.Frame(self, width=600, height=600, bg="black")
+        self.video_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=False)
 
-print("Press ESC to exit")
+        # Info rész - például QR kód szöveg megjelenítése
+        self.info_frame = tk.Frame(self, width=300, height=600, bg="white")
+        self.info_frame.pack(side=tk.RIGHT, fill=tk.BOTH, expand=False)
 
-while True:
-    frame = vs.read()
-    if frame is None:
-        continue
+        self.qr_label = tk.Label(self.info_frame, text="QR kód nincs detektálva", font=("Arial", 14), bg="white", wraplength=280)
+        self.qr_label.pack(padx=10, pady=20)
 
-    # Detect QR code
-    data, points, _ = qr_detector.detectAndDecode(frame)
-    if points is not None and data:
-        print(f"QR Code Detected: {data}")
-        # Draw QR bounding box
-        pts = points[0].astype(int)
-        for i in range(len(pts)):
-            cv2.line(frame, tuple(pts[i]), tuple(pts[(i+1)%4]), (0, 255, 0), 2)
+        # Kamera képet megjelenítő Label (ide tesszük a képet)
+        self.video_label = tk.Label(self.video_frame)
+        self.video_label.pack(fill=tk.BOTH, expand=True)
 
-    cv2.imshow("QR Code Scanner (RTSP Stream)", frame)
-    if cv2.waitKey(1) & 0xFF == 27:
-        break
+        self.qr_detector = cv2.QRCodeDetector()
 
-# Cleanup
-vs.stop()
-cv2.destroyAllWindows()
+        self.update_frame()
+
+    def update_frame(self):
+        frame = self.video_stream.read()
+        if frame is not None:
+            # QR kód detektálás
+            data, points, _ = self.qr_detector.detectAndDecode(frame)
+            if points is not None and data:
+                pts = points[0].astype(int)
+                for i in range(len(pts)):
+                    cv2.line(frame, tuple(pts[i]), tuple(pts[(i+1) % 4]), (0, 255, 0), 2)
+                self.qr_label.config(text=f"QR kód detektálva:\n{data}")
+            else:
+                self.qr_label.config(text="QR kód nincs detektálva")
+
+            # BGR -> RGB konverzió, mert OpenCV BGR, PIL RGB
+            cv2image = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            img = Image.fromarray(cv2image)
+            # Méretezheted a képet, hogy illeszkedjen a video_frame méretéhez
+            img = img.resize((600, 600), Image.Resampling.LANCZOS)
+
+
+            imgtk = ImageTk.PhotoImage(image=img)
+
+            self.video_label.imgtk = imgtk
+            self.video_label.configure(image=imgtk)
+
+        # Újramegjelenítés 30 ms-ként (~33 FPS)
+        self.after(30, self.update_frame)
+
+    def on_closing(self):
+        self.video_stream.stop()
+        self.destroy()
+
+if __name__ == "__main__":
+    vs = VideoStream(rtsp_url)
+    app = App(vs)
+    app.protocol("WM_DELETE_WINDOW", app.on_closing)
+    app.mainloop()
