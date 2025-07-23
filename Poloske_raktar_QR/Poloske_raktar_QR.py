@@ -2,6 +2,8 @@
 from threading import Thread
 import tkinter as tk
 from PIL import Image, ImageTk
+from pyzbar.pyzbar import decode
+import numpy as np
 
 # Async video stream class
 class VideoStream:
@@ -12,6 +14,8 @@ class VideoStream:
         self.running = True
         self.thread = Thread(target=self.update, daemon=True)
         self.thread.start()
+        
+
 
     def update(self):
         while self.running:
@@ -27,7 +31,7 @@ class VideoStream:
         self.thread.join()
         self.cap.release()
 
-# --- Dahua RTSP substream (lower latency) ---
+# --- Dahua RTSP substream ---
 rtsp_url = "rtsp://admin:Portal2008@192.168.6.88:554/cam/realmonitor?channel=1&subtype=1"
 
 # Tkinter GUI
@@ -37,71 +41,86 @@ class App(tk.Tk):
         self.title("QR Scanner")
         self.attributes("-fullscreen", True)
         self.video_stream = video_stream
-        self.qr_data = None
+        self.detected_qr_data = []
+        self.qr_locked = False
 
-        # Kamera képet megjelenítő Frame (az ablak kb 2/3 részét foglalja)
+        # Kamera kép Frame
         video_frame = tk.Frame(self, bg="black")
-        video_frame.place(relx=0, rely=0, relwidth=0.4, relheight=0.8)
+        video_frame.place(relx=0, rely=0, relwidth=0.5, relheight=0.8)
 
-        # Info rész - például QR kód szöveg megjelenítése
+        # QR Info rész
         info_frame = tk.Frame(self, bg="white")
-        info_frame.place(relx=0.4, rely=0, relwidth=0.7, relheight=0.8)
+        info_frame.place(relx=0.5, rely=0, relwidth=0.5, relheight=0.8)
 
-        self.qr_label = tk.Label(info_frame, text="QR kód nincs detektálva", font=("Arial", 14), bg="white", wraplength=280)
+        self.qr_label = tk.Label(info_frame, text="QR kód nincs detektálva", font=("Arial", 24), bg="white", wraplength=350)
         self.qr_label.pack(padx=10, pady=20)
 
-        # Zöld jelzés
+        # Színes értesítő sáv
         self.green_notification = tk.Frame(self, bg="gray")
         self.green_notification.place(relx=0, rely=0.8, relwidth=1, relheight=0.2)
 
-        # Kamera képet megjelenítő Label (ide tesszük a képet)
         self.video_label = tk.Label(video_frame)
         self.video_label.pack(fill=tk.BOTH, expand=True)
-
-        self.qr_detector = cv2.QRCodeDetector()
 
         self.update_frame()
 
     def update_frame(self):
         frame = self.video_stream.read()
         if frame is not None:
-            # QR kód detektálás
-            data, points, _ = self.qr_detector.detectAndDecode(frame)
+            decoded_objects = decode(frame)
+            good_qr_found = False
+            any_qr_found = False
 
-            if points is not None and data:
-                if data != self.qr_data:
-                    self.qr_data = data
-                    
-                    expected_value = "PALLET"
-                    if expected_value in data:  # ha jó QR kódot olvas be
-                        self.qr_label.config(text=f"QR kód detektálva:\n{data}")
-                        self.green_notification.config(bg="green") # turn green
-                    else:   # ha rossz QR kódot olvas be
-                        self.qr_label.config(text=f"Rossz QR kód:\n{data}")
-                        self.green_notification.config(bg="red")  # turn red
+            for obj in decoded_objects:
+                data = obj.data.decode("utf-8")
+                any_qr_found = True
 
-                    self.after(3000, self.reset_notification)  # 3 másodperc után visszaállítja a színt
-            else:
-                self.qr_data = None
+                # Doboz kirajzolása
+                pts = obj.polygon
+                if len(pts) > 4:
+                    hull = cv2.convexHull(np.array(pts, dtype=np.float32))
+                    pts = list(map(tuple, np.squeeze(hull)))
+                else:
+                    pts = list(map(tuple, pts))
 
-            # BGR -> RGB konverzió
+                for i in range(len(pts)):
+                    cv2.line(frame, pts[i], pts[(i + 1) % len(pts)], (0, 255, 0), 2)
+
+                if "PALLET" in data:
+                    if not self.qr_locked:
+                        if data not in self.detected_qr_data:
+                            print(f"Helyes QR: {data}")
+                            self.detected_qr_data.append(data)
+                        self.qr_label.config(text=f"Helyes QR kód:\n{data}")
+                        self.green_notification.config(bg="green")
+                        self.qr_locked = True
+                        self.after(5000, self.reset_notification)
+                        good_qr_found = True
+                        break
+
+            if good_qr_found:
+                self.after(5000, self.reset_notification)
+
+            # Kép konvertálás
             cv2image = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
             img = Image.fromarray(cv2image)
-            
-            img = img.resize((600, 600), Image.Resampling.LANCZOS)
 
+            width = self.video_label.winfo_width()
+            height = self.video_label.winfo_height()
+            if width > 0 and height > 0:
+                img = img.resize((width, height), Image.Resampling.LANCZOS)
 
             imgtk = ImageTk.PhotoImage(image=img)
-
             self.video_label.imgtk = imgtk
             self.video_label.configure(image=imgtk)
 
-        # Újramegjelenítés 30 ms-ként (~33 FPS)
         self.after(30, self.update_frame)
 
     def reset_notification(self):
         self.green_notification.config(bg="gray")
-        self.qr_label.config(text="Új QR kód nincs detektálva")
+        self.qr_label.config(text="QR kód nincs detektálva")
+        self.qr_locked = False
+
 
     def on_closing(self):
         self.video_stream.stop()
