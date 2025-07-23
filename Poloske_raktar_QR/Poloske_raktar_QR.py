@@ -35,22 +35,27 @@ class App(tk.Tk):
     def __init__(self, video_stream):
         super().__init__()
         self.title("QR Scanner")
-        self.geometry("900x600")  # Teljes ablak méret
+        self.attributes("-fullscreen", True)
         self.video_stream = video_stream
+        self.qr_data = None
 
         # Kamera képet megjelenítő Frame (az ablak kb 2/3 részét foglalja)
-        self.video_frame = tk.Frame(self, width=600, height=600, bg="black")
-        self.video_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=False)
+        video_frame = tk.Frame(self, bg="black")
+        video_frame.place(relx=0, rely=0, relwidth=0.4, relheight=0.8)
 
         # Info rész - például QR kód szöveg megjelenítése
-        self.info_frame = tk.Frame(self, width=300, height=600, bg="white")
-        self.info_frame.pack(side=tk.RIGHT, fill=tk.BOTH, expand=False)
+        info_frame = tk.Frame(self, bg="white")
+        info_frame.place(relx=0.4, rely=0, relwidth=0.7, relheight=0.8)
 
-        self.qr_label = tk.Label(self.info_frame, text="QR kód nincs detektálva", font=("Arial", 14), bg="white", wraplength=280)
+        self.qr_label = tk.Label(info_frame, text="QR kód nincs detektálva", font=("Arial", 14), bg="white", wraplength=280)
         self.qr_label.pack(padx=10, pady=20)
 
+        # Zöld jelzés
+        self.green_notification = tk.Frame(self, bg="gray")
+        self.green_notification.place(relx=0, rely=0.8, relwidth=1, relheight=0.2)
+
         # Kamera képet megjelenítő Label (ide tesszük a képet)
-        self.video_label = tk.Label(self.video_frame)
+        self.video_label = tk.Label(video_frame)
         self.video_label.pack(fill=tk.BOTH, expand=True)
 
         self.qr_detector = cv2.QRCodeDetector()
@@ -62,18 +67,27 @@ class App(tk.Tk):
         if frame is not None:
             # QR kód detektálás
             data, points, _ = self.qr_detector.detectAndDecode(frame)
-            if points is not None and data:
-                pts = points[0].astype(int)
-                for i in range(len(pts)):
-                    cv2.line(frame, tuple(pts[i]), tuple(pts[(i+1) % 4]), (0, 255, 0), 2)
-                self.qr_label.config(text=f"QR kód detektálva:\n{data}")
-            else:
-                self.qr_label.config(text="QR kód nincs detektálva")
 
-            # BGR -> RGB konverzió, mert OpenCV BGR, PIL RGB
+            if points is not None and data:
+                if data != self.qr_data:
+                    self.qr_data = data
+                    
+                    expected_value = "PALLET"
+                    if expected_value in data:  # ha jó QR kódot olvas be
+                        self.qr_label.config(text=f"QR kód detektálva:\n{data}")
+                        self.green_notification.config(bg="green") # turn green
+                    else:   # ha rossz QR kódot olvas be
+                        self.qr_label.config(text=f"Rossz QR kód:\n{data}")
+                        self.green_notification.config(bg="red")  # turn red
+
+                    self.after(3000, self.reset_notification)  # 3 másodperc után visszaállítja a színt
+            else:
+                self.qr_data = None
+
+            # BGR -> RGB konverzió
             cv2image = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
             img = Image.fromarray(cv2image)
-            # Méretezheted a képet, hogy illeszkedjen a video_frame méretéhez
+            
             img = img.resize((600, 600), Image.Resampling.LANCZOS)
 
 
@@ -84,6 +98,10 @@ class App(tk.Tk):
 
         # Újramegjelenítés 30 ms-ként (~33 FPS)
         self.after(30, self.update_frame)
+
+    def reset_notification(self):
+        self.green_notification.config(bg="gray")
+        self.qr_label.config(text="Új QR kód nincs detektálva")
 
     def on_closing(self):
         self.video_stream.stop()
