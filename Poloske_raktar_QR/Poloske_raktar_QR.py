@@ -4,6 +4,7 @@ import tkinter as tk
 from PIL import Image, ImageTk
 from pyzbar.pyzbar import decode
 import numpy as np
+from tkhtmlview import HTMLLabel
 
 # Async video stream class
 class VideoStream:
@@ -49,11 +50,11 @@ class App(tk.Tk):
         video_frame.place(relx=0, rely=0, relwidth=0.5, relheight=0.8)
 
         # QR Info rész
-        info_frame = tk.Frame(self, bg="white")
-        info_frame.place(relx=0.5, rely=0, relwidth=0.5, relheight=0.8)
+        self.info_frame = tk.Frame(self, bg="white")
+        self.info_frame.place(relx=0.5, rely=0, relwidth=0.5, relheight=0.8)
 
-        self.qr_label = tk.Label(info_frame, text="QR kód nincs detektálva", font=("Arial", 24), bg="white", wraplength=350)
-        self.qr_label.pack(padx=10, pady=20)
+        # self.qr_label = tk.Label(self.info_frame, text="QR kód nincs detektálva", font=("Arial", 24), bg="white", wraplength=350)
+        # self.qr_label.pack(padx=10, pady=20)
 
         # Színes értesítő sáv
         self.green_notification = tk.Frame(self, bg="gray")
@@ -63,6 +64,17 @@ class App(tk.Tk):
         self.video_label.pack(fill=tk.BOTH, expand=True)
 
         self.update_frame()
+
+    def show_api_response(self, qr_data):
+        
+        try:
+            with open("index.html", "r", encoding="utf-8") as file:
+                html_content = file.read()
+        except Exception as e:
+                html_content = f"<h3>Nem sikerült betölteni a HTML fájlt:<br>{str(e)}</h3>"
+
+        html_label = HTMLLabel(self.info_frame, html=html_content)
+        html_label.pack(fill="both", expand=True)
 
     def update_frame(self):
         frame = self.video_stream.read()
@@ -91,10 +103,13 @@ class App(tk.Tk):
                         if data not in self.detected_qr_data:
                             print(f"Helyes QR: {data}")
                             self.detected_qr_data.append(data)
-                        self.qr_label.config(text=f"Helyes QR kód:\n{data}")
+                        # self.qr_label.config(text=f"Helyes QR kód:\n{data}")
                         self.green_notification.config(bg="green")
                         self.qr_locked = True
                         self.after(5000, self.reset_notification)
+                        
+                        self.show_api_response(data)
+
                         good_qr_found = True
                         break
 
@@ -118,9 +133,11 @@ class App(tk.Tk):
 
     def reset_notification(self):
         self.green_notification.config(bg="gray")
-        self.qr_label.config(text="QR kód nincs detektálva")
-        self.qr_locked = False
+        # self.qr_label.config(text="QR kód nincs detektálva")
+        for widget in self.info_frame.winfo_children():
+            widget.destroy()
 
+        self.qr_locked = False
 
     def on_closing(self):
         self.video_stream.stop()
