@@ -5,6 +5,7 @@ from PIL import Image, ImageTk
 from pyzbar.pyzbar import decode
 import numpy as np
 from tkhtmlview import HTMLLabel
+import json
 
 # Async video stream class
 class VideoStream:
@@ -32,6 +33,14 @@ class VideoStream:
         self.thread.join()
         self.cap.release()
 
+
+def load_cameras(json_path="config.json"):
+    with open(json_path, "r", encoding="latin-1") as f:
+        data = json.load(f)
+    return data["cameras"]
+
+
+
 # --- Dahua RTSP substream ---
 rtsp_url = "rtsp://admin:Portal2008@192.168.6.88:554/cam/realmonitor?channel=1&subtype=1"
 
@@ -45,9 +54,25 @@ class App(tk.Tk):
         self.detected_qr_data = []
         self.qr_locked = False
 
+        self.cameras = load_cameras()
+        self.camera_names = [cam["name"] for cam in self.cameras]
+        self.selected_camera = tk.StringVar(value=self.camera_names[0])
+
+        # Hozd létre az OptionMenu-t külön változóban
+        camera_selector = tk.OptionMenu(self, self.selected_camera, *self.camera_names)
+        camera_selector.config(font=("Arial", 14))
+        camera_selector.place(relx=0.02, rely=0.01)
+
+        # Ezután kösd hozzá az eseményt
+        self.selected_camera.trace_add("write", lambda *args: self.change_camera(self.selected_camera.get()))
+
+        
+
+
+
         # Kamera kép Frame
         video_frame = tk.Frame(self, bg="black")
-        video_frame.place(relx=0, rely=0, relwidth=0.5, relheight=0.8)
+        video_frame.place(relx=0, rely=0.05, relwidth=0.5, relheight=0.75)
 
         # QR Info rész
         self.info_frame = tk.Frame(self, bg="white")
@@ -64,6 +89,14 @@ class App(tk.Tk):
         self.video_label.pack(fill=tk.BOTH, expand=True)
 
         self.update_frame()
+
+    def change_camera(self, selected_name):
+            for cam in self.cameras:
+                if cam["name"] == selected_name:
+                    print(f"[INFO] Váltás erre: {selected_name}")
+                    self.video_stream.stop()
+                    self.video_stream = VideoStream(cam["url"])
+                    break
 
     def show_api_response(self, qr_data):
         
@@ -144,6 +177,8 @@ class App(tk.Tk):
         self.destroy()
 
 if __name__ == "__main__":
+    cameras = load_cameras()
+    default_rtsp = cameras[0]["url"]
     vs = VideoStream(rtsp_url)
     app = App(vs)
     app.protocol("WM_DELETE_WINDOW", app.on_closing)
