@@ -1,40 +1,40 @@
 {
-  "cameras": [
-    {
-      "name": "Kamera 1",
-      "url": "rtsp://admin:Portal2008@192.168.6.88:554/cam/realmonitor?channel=1&subtype=1"
-    },
-    {
-      "name": "Kamera 2",
-      "url": "rtsp://admin:Portal2008@192.168.6.87:554/cam/realmonitor?channel=1&subtype=1"
-    },
-    {
-      "name": "Kamera 3",
-      "url": "rtsp://admin:Portal2008@192.168.6.86:554/cam/realmonitor?channel=1&subtype=1"
-    },
-    {
-      "name": "Kamera 4",
-      "url": "rtsp://admin:Portal2008@192.168.6.85:554/cam/realmonitor?channel=1&subtype=1"
-    },
-    {
-      "name": "Kamera 5",
-      "url": "rtsp://admin:Portal2008@192.168.6.84:554/cam/realmonitor?channel=1&subtype=1"
-    },
-    {
-      "name": "Kamera 6",
-      "url": "rtsp://admin:Portal2008@192.168.6.83:554/cam/realmonitor?channel=1&subtype=1"
-    },
-    {
-      "name": "Kamera 7",
-      "url": "rtsp://admin:Portal2008@192.168.6.82:554/cam/realmonitor?channel=1&subtype=1"
-    },
-    {
-        "name": "Kamera 8",
-        "url": "rtsp://admin:Portal2008@192.168.6.81:554/cam/realmonitor?channel=1&subtype=1"
-    }
-    {
-        "name": "Kamera 9",
-        "url": "rtsp://admin:Portal2008@192.168.6.80:554/cam/realmonitor?channel=1&subtype=1"
-    }
-  ]
+    "cameras": [
+        {
+            "name": "Kamera 1",
+            "url": "rtsp://admin:Portal2008@192.168.6.88:554/cam/realmonitor?channel=1&subtype=1"
+        },
+        {
+            "name": "Kamera 2",
+            "url": "rtsp://admin:Portal2008@192.168.6.87:554/cam/realmonitor?channel=1&subtype=1"
+        },
+        {
+            "name": "Kamera 3",
+            "url": "rtsp://admin:Portal2008@192.168.6.86:554/cam/realmonitor?channel=1&subtype=1"
+        },
+        {
+            "name": "Kamera 4",
+            "url": "rtsp://admin:Portal2008@192.168.6.85:554/cam/realmonitor?channel=1&subtype=1"
+        },
+        {
+            "name": "Kamera 5",
+            "url": "rtsp://admin:Portal2008@192.168.6.84:554/cam/realmonitor?channel=1&subtype=1"
+        },
+        {
+            "name": "Kamera 6",
+            "url": "rtsp://admin:Portal2008@192.168.6.83:554/cam/realmonitor?channel=1&subtype=1"
+        },
+        {
+            "name": "Kamera 7",
+            "url": "rtsp://admin:Portal2008@192.168.6.82:554/cam/realmonitor?channel=1&subtype=1"
+        },
+        {
+            "name": "Kamera 8",
+            "url": "rtsp://admin:Portal2008@192.168.6.81:554/cam/realmonitor?channel=1&subtype=1"
+        },
+        {
+            "name": "Kamera 9",
+            "url": "rtsp://admin:Portal2008@192.168.6.80:554/cam/realmonitor?channel=1&subtype=1"
+        }
+    ]
 }
