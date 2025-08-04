@@ -11,7 +11,7 @@ import json
 class VideoStream:
     def __init__(self, src):
         self.src = src
-        self.cap = cv2.VideoCapture(self.src)
+        self.cap = None
         self.frame = None
         self.running = True
         self.thread = Thread(target=self.update, daemon=True)
@@ -20,10 +20,22 @@ class VideoStream:
 
 
     def update(self):
-        while self.running:
+       while self.running:
+            if self.cap is None or not self.cap.isOpened():
+                self.cap = cv2.VideoCapture(self.src)
+                if not self.cap.isOpened():
+                    print("[INFO] Kamera nem elérhető, újrapróbálkozás...")
+                    self.frame = None
+                    cv2.waitKey(1000)
+                    continue
             ret, frame = self.cap.read()
             if ret:
                 self.frame = frame
+            else:
+                print("[INFO] Nem sikerült képkockát olvasni, újrapróbálkozás...")
+                self.frame = None
+                self.cap.release()
+                self.cap = None
 
     def read(self):
         return self.frame
@@ -31,7 +43,8 @@ class VideoStream:
     def stop(self):
         self.running = False
         self.thread.join()
-        self.cap.release()
+        if self.cap:
+            self.cap.release()
 
 
 def load_cameras(json_path="config.json"):
@@ -46,11 +59,11 @@ rtsp_url = "rtsp://admin:Portal2008@192.168.6.88:554/cam/realmonitor?channel=1&s
 
 # Tkinter GUI
 class App(tk.Tk):
-    def __init__(self, video_stream):
+    def __init__(self):
         super().__init__()
         self.title("QR Scanner")
         self.attributes("-fullscreen", True)
-        self.video_stream = video_stream
+        self.video_stream = None
         self.detected_qr_data = []
         self.qr_locked = False
 
@@ -88,15 +101,27 @@ class App(tk.Tk):
         self.video_label = tk.Label(video_frame)
         self.video_label.pack(fill=tk.BOTH, expand=True)
 
-        self.update_frame()
+        default_url = self.get_selected_camera_url()
+        self.video_stream = VideoStream(default_url)
 
+        # Folyamatos frissítés
+        self.after(30, self.update_frame)
+
+    def get_selected_camera_url(self):
+        selected_name = self.selected_camera.get()
+        for cam in self.cameras:
+            if cam["name"] == selected_name:
+                return cam["url"]
+        return None
+
+    
     def change_camera(self, selected_name):
-            for cam in self.cameras:
-                if cam["name"] == selected_name:
-                    print(f"[INFO] Váltás erre: {selected_name}")
+             url = self.get_selected_camera_url()
+             if url:
+                print(f"[INFO] Váltás új kamerára: {selected_name}")
+                if self.video_stream:
                     self.video_stream.stop()
-                    self.video_stream = VideoStream(cam["url"])
-                    break
+                self.video_stream = VideoStream(url)
 
     def show_api_response(self, qr_data):
         
@@ -110,7 +135,7 @@ class App(tk.Tk):
         html_label.pack(fill="both", expand=True)
 
     def update_frame(self):
-        frame = self.video_stream.read()
+        frame = self.video_stream.read() if self.video_stream else None
         if frame is not None:
             decoded_objects = decode(frame)
             good_qr_found = False
@@ -177,9 +202,6 @@ class App(tk.Tk):
         self.destroy()
 
 if __name__ == "__main__":
-    cameras = load_cameras()
-    default_rtsp = cameras[0]["url"]
-    vs = VideoStream(rtsp_url)
-    app = App(vs)
+    app = App()
     app.protocol("WM_DELETE_WINDOW", app.on_closing)
     app.mainloop()
