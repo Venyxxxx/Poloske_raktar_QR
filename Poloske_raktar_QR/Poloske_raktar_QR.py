@@ -52,11 +52,6 @@ def load_cameras(json_path="config.json"):
         data = json.load(f)
     return data["cameras"]
 
-
-
-# --- Dahua RTSP substream ---
-rtsp_url = "rtsp://admin:Portal2008@192.168.6.88:554/cam/realmonitor?channel=1&subtype=1"
-
 # Tkinter GUI
 class App(tk.Tk):
     def __init__(self):
@@ -71,28 +66,25 @@ class App(tk.Tk):
         self.camera_names = [cam["name"] for cam in self.cameras]
         self.selected_camera = tk.StringVar(value=self.camera_names[0])
 
-        # Hozd létre az OptionMenu-t külön változóban
+        # Kamera választó menü
         camera_selector = tk.OptionMenu(self, self.selected_camera, *self.camera_names)
         camera_selector.config(font=("Arial", 14))
         camera_selector.place(relx=0.02, rely=0.01)
 
-        # Ezután kösd hozzá az eseményt
+        # Event figyelése a kamera váltásra
         self.selected_camera.trace_add("write", lambda *args: self.change_camera(self.selected_camera.get()))
-
-        
-
-
 
         # Kamera kép Frame
         video_frame = tk.Frame(self, bg="black")
         video_frame.place(relx=0, rely=0.05, relwidth=0.5, relheight=0.75)
 
+        # Kamerára várakozás üzenet
+        self.waiting_label = tk.Label(video_frame, text="Kamera betöltése...", font=("Arial", 24))
+        self.waiting_label.pack(fill=tk.BOTH, expand=True)
+
         # QR Info rész
         self.info_frame = tk.Frame(self, bg="white")
         self.info_frame.place(relx=0.5, rely=0, relwidth=0.5, relheight=0.8)
-
-        # self.qr_label = tk.Label(self.info_frame, text="QR kód nincs detektálva", font=("Arial", 24), bg="white", wraplength=350)
-        # self.qr_label.pack(padx=10, pady=20)
 
         # Színes értesítő sáv
         self.green_notification = tk.Frame(self, bg="gray")
@@ -137,6 +129,7 @@ class App(tk.Tk):
     def update_frame(self):
         frame = self.video_stream.read() if self.video_stream else None
         if frame is not None:
+            self.waiting_label.pack_forget()
             decoded_objects = decode(frame)
             good_qr_found = False
             any_qr_found = False
