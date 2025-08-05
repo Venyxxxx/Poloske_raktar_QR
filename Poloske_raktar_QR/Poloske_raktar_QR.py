@@ -5,6 +5,7 @@ from PIL import Image, ImageTk
 from pyzbar.pyzbar import decode
 import numpy as np
 from tkhtmlview import HTMLLabel
+import time
 import json
 
 # Async video stream class
@@ -20,13 +21,17 @@ class VideoStream:
 
 
     def update(self):
+       print(f"[DEBUG] VideoStream thread started for source: {self.src}")
        while self.running:
             if self.cap is None or not self.cap.isOpened():
-                self.cap = cv2.VideoCapture(self.src)
+                self.cap = cv2.VideoCapture(self.src, cv2.CAP_FFMPEG)
                 if not self.cap.isOpened():
                     print("[INFO] Kamera nem elérhető, újrapróbálkozás...")
                     self.frame = None
-                    cv2.waitKey(1000)
+                    for _ in range(10):  # Check for stop every 0.1s for 1s
+                        if not self.running:
+                            return
+                        time.sleep(0.1)
                     continue
             ret, frame = self.cap.read()
             if ret:
@@ -36,13 +41,15 @@ class VideoStream:
                 self.frame = None
                 self.cap.release()
                 self.cap = None
+       print(f"[DEBUG] Exiting stream thread for {self.src}")
 
     def read(self):
         return self.frame
 
     def stop(self):
         self.running = False
-        self.thread.join()
+        if self.thread.is_alive():
+            self.thread.join(timeout=2)
         if self.cap:
             self.cap.release()
 
@@ -52,12 +59,7 @@ def load_cameras(json_path="config.json"):
         data = json.load(f)
     return data["cameras"]
 
-
-
-# --- Dahua RTSP substream ---
-rtsp_url = "rtsp://admin:Portal2008@192.168.6.88:554/cam/realmonitor?channel=1&subtype=1"
-
-# Tkinter GUI
+# Tkinter -
 class App(tk.Tk):
     def __init__(self):
         super().__init__()
@@ -71,28 +73,25 @@ class App(tk.Tk):
         self.camera_names = [cam["name"] for cam in self.cameras]
         self.selected_camera = tk.StringVar(value=self.camera_names[0])
 
-        # Hozd létre az OptionMenu-t külön változóban
+        # Kamera kiválasztó menü
         camera_selector = tk.OptionMenu(self, self.selected_camera, *self.camera_names)
         camera_selector.config(font=("Arial", 14))
         camera_selector.place(relx=0.02, rely=0.01)
 
-        # Ezután kösd hozzá az eseményt
+        # Event kezelő a kamera váltására
         self.selected_camera.trace_add("write", lambda *args: self.change_camera(self.selected_camera.get()))
-
-        
-
-
 
         # Kamera kép Frame
         video_frame = tk.Frame(self, bg="black")
         video_frame.place(relx=0, rely=0.05, relwidth=0.5, relheight=0.75)
 
+        # Kamera várokozó szöveg
+        self.waiting_label = tk.Label(video_frame, text="Kamera betöltése...", font=("Arial", 24))
+        self.waiting_label.pack(fill=tk.BOTH, expand=True)
+
         # QR Info rész
         self.info_frame = tk.Frame(self, bg="white")
         self.info_frame.place(relx=0.5, rely=0, relwidth=0.5, relheight=0.8)
-
-        # self.qr_label = tk.Label(self.info_frame, text="QR kód nincs detektálva", font=("Arial", 24), bg="white", wraplength=350)
-        # self.qr_label.pack(padx=10, pady=20)
 
         # Színes értesítő sáv
         self.green_notification = tk.Frame(self, bg="gray")
@@ -111,6 +110,7 @@ class App(tk.Tk):
         selected_name = self.selected_camera.get()
         for cam in self.cameras:
             if cam["name"] == selected_name:
+                # print(f"[DEBUG] URL for selected camera ({selected_name}): {cam['url']}")
                 return cam["url"]
         return None
 
@@ -118,10 +118,14 @@ class App(tk.Tk):
     def change_camera(self, selected_name):
              url = self.get_selected_camera_url()
              if url:
-                print(f"[INFO] Váltás új kamerára: {selected_name}")
+                # print(f"[INFO] Changing to new camera: {selected_name}")
                 if self.video_stream:
                     self.video_stream.stop()
-                self.video_stream = VideoStream(url)
+                    self.video_stream = None
+                self.after(300, lambda: self.start_new_stream(url))
+
+    def start_new_stream(self, url):
+        self.video_stream = VideoStream(url)
 
     def show_api_response(self, qr_data):
         
@@ -137,6 +141,8 @@ class App(tk.Tk):
     def update_frame(self):
         frame = self.video_stream.read() if self.video_stream else None
         if frame is not None:
+            # print("[DEBUG] Got frame from current video stream.")
+            self.waiting_label.pack_forget()
             decoded_objects = decode(frame)
             good_qr_found = False
             any_qr_found = False
